@@ -1,5 +1,10 @@
+use chrono::Utc;
+use log::debug;
 use serde::Serialize;
-use std::{path::PathBuf, time::SystemTime};
+use std::{
+    path::PathBuf,
+    time::{Instant, SystemTime},
+};
 use tokio::{
     fs::{create_dir_all, File},
     io::AsyncWriteExt,
@@ -13,6 +18,8 @@ use warp::{
 
 #[tokio::main]
 async fn main() {
+    env_logger::init();
+
     // Parse arguments from environment by leaking their memory and converting them to `&'static str` instances
     let storage_path =
         string_to_static_str(std::env::var("STORAGE_PATH").expect("No storage path provided."));
@@ -50,7 +57,12 @@ async fn main() {
         .and(warp::path("health"))
         .then(|| async move { StatusCode::OK });
 
-    let routes = fetch.or(store).or(delete).or(index).or(health_probe);
+    let routes = fetch
+        .or(store)
+        .or(delete)
+        .or(index)
+        .or(health_probe)
+        .with(warp::log("scan-server::http"));
 
     let signal = async move {
         tokio::signal::ctrl_c()
@@ -73,17 +85,11 @@ async fn build_index(storage_path: &str) -> Result<Json, Rejection> {
         let file_type = entry.file_type().await.map_err(internal_error)?;
         let file_name = entry.file_name().to_string_lossy().into_owned();
 
-        let metadata = entry.metadata().await.map_err(internal_error)?;
-        let creation_time = metadata.created().map_err(internal_error)?;
-        let timestamp = creation_time
-            .duration_since(SystemTime::UNIX_EPOCH)
-            .map_err(internal_error)?
-            .as_secs();
-
         if file_type.is_file() {
             entries.push(FileEntry {
                 path: format!("/document/{file_name}"),
-                scanned_at: format!("{timestamp}"),
+                // Since we use the RFC3339 formatted upload date as the filename, it can be used here directly
+                scanned_at: format!("{file_name}"),
             });
         }
     }
@@ -95,7 +101,7 @@ async fn delete_file(storage_path: &str, file_name: String) -> Result<impl warp:
     let storage_path: PathBuf = storage_path.into();
     let path = storage_path.join(file_name.to_string());
 
-    println!("del\t{file_name}");
+    debug!("del\t{file_name}");
 
     tokio::fs::remove_file(path).await.map_err(internal_error)?;
 
@@ -103,9 +109,9 @@ async fn delete_file(storage_path: &str, file_name: String) -> Result<impl warp:
 }
 
 async fn store_file(storage_path: &str, bytes: Bytes) -> Result<impl warp::Reply, Rejection> {
-    let id = uuid::Uuid::new_v4();
+    let id = Utc::now().to_rfc3339();
 
-    println!("put\t{id} (len = {})", bytes.len());
+    debug!("put\t{id} (len = {})", bytes.len());
 
     let storage_path: PathBuf = storage_path.into();
     let path = storage_path.join(id.to_string());
