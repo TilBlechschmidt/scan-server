@@ -1,10 +1,7 @@
 use chrono::Utc;
 use log::debug;
 use serde::Serialize;
-use std::{
-    path::PathBuf,
-    time::{Instant, SystemTime},
-};
+use std::path::PathBuf;
 use tokio::{
     fs::{create_dir_all, File},
     io::AsyncWriteExt,
