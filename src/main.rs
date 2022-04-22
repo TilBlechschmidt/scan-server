@@ -48,7 +48,15 @@ async fn main() {
 
     let routes = fetch.or(store).or(delete).or(index);
 
-    warp::serve(routes).run(([0, 0, 0, 0], 3030)).await;
+    let signal = async move {
+        tokio::signal::ctrl_c()
+            .await
+            .expect("Failed to await CTRL+C");
+    };
+
+    let (_, server) = warp::serve(routes).bind_with_graceful_shutdown(([0, 0, 0, 0], 3030), signal);
+
+    server.await
 }
 
 async fn build_index(storage_path: &str) -> Result<Json, Rejection> {
