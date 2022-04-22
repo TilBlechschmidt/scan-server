@@ -46,7 +46,11 @@ async fn main() {
         .and(auth)
         .and_then(move || build_index(&storage_path));
 
-    let routes = fetch.or(store).or(delete).or(index);
+    let health_probe = warp::get()
+        .and(warp::path("health"))
+        .then(|| async move { StatusCode::OK });
+
+    let routes = fetch.or(store).or(delete).or(index).or(health_probe);
 
     let signal = async move {
         tokio::signal::ctrl_c()
