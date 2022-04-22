@@ -22,7 +22,6 @@ async fn main() {
         string_to_static_str(std::env::var("STORAGE_PATH").expect("No storage path provided."));
     let auth_token =
         string_to_static_str(std::env::var("AUTH_TOKEN").expect("No auth token provided."));
-    let content_length_limit = 1024 * 1024 * 256;
 
     create_dir_all(storage_path)
         .await
@@ -36,7 +35,6 @@ async fn main() {
 
     let store = warp::put()
         .and(warp::path!("Image.pdf"))
-        .and(warp::body::content_length_limit(content_length_limit))
         .and(warp::body::bytes())
         .and_then(move |bytes| store_file(&storage_path, bytes));
 
