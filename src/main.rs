@@ -57,7 +57,10 @@ async fn main() {
         .and(warp::path("health"))
         .then(|| async move { StatusCode::OK });
 
-    let routes = fetch
+    let head = warp::head().then(|| async move { StatusCode::NOT_FOUND });
+
+    let routes = head
+        .or(fetch)
         .or(store)
         .or(delete)
         .or(index)
