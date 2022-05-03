@@ -4,13 +4,13 @@ FROM ekidd/rust-musl-builder AS builder
 # assumes a UID of 1000, but TravisCI has switched to 2000.
 ADD --chown=rust:rust . ./
 
-RUN cargo build --release 
+RUN cargo build --release --bin server
 RUN pwd && ls target
 
 FROM alpine
 
 RUN apk --no-cache add ca-certificates
 
-COPY --from=builder /home/rust/src/target/x86_64-unknown-linux-musl/release/scan-server /scan-server
+COPY --from=builder /home/rust/src/target/x86_64-unknown-linux-musl/release/server /scan-server
 
 CMD /scan-server
