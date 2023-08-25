@@ -11,18 +11,20 @@ struct FileEntry {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let auth = "Bearer 1AB0FCD0-0D07-4D7C-8F41-FD16488086DC";
+    let token = std::env::var("SCAN_TOKEN").expect("missing SCAN_TOKEN env var");
+    let auth = format!("Bearer {token}");
     let path: PathBuf = "/Users/tibl/Downloads".into();
 
-    // curl -H "Authorization:Bearer 1AB0FCD0-0D07-4D7C-8F41-FD16488086DC" https://scan.blechschmidt.dev
     let client = Client::new();
     let body = client
-        .get("https://scan.blechschmidt.dev")
-        .header("Authorization", auth)
+        .get("https://scan.tibl.dev")
+        .header("Authorization", &auth)
         .send()
         .await?
         .text()
         .await?;
+
+    println!("BODY:\n{body}");
 
     let files: Vec<FileEntry> = serde_json::from_str(&body).unwrap();
 
@@ -30,10 +32,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!("Downloading file {}", file_entry.path);
 
         // Download file
-        let file_url = format!("https://scan.blechschmidt.dev{}", file_entry.path);
+        let file_url = format!("https://scan.tibl.dev{}", file_entry.path);
         let file_bytes = client
             .get(&file_url)
-            .header("Authorization", auth)
+            .header("Authorization", &auth)
             .send()
             .await?
             .bytes()
@@ -49,7 +51,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         // Delete online version
         let delete_status = client
             .delete(&file_url)
-            .header("Authorization", auth)
+            .header("Authorization", &auth)
             .send()
             .await?
             .status();

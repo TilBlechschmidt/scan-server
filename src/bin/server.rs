@@ -27,7 +27,8 @@ async fn main() {
         .await
         .expect("failed to create storage directory");
 
-    let auth = warp::header::exact("Authorization", auth_token);
+    let auth_value = format!("Bearer {auth_token}");
+    let auth = warp::header::exact("Authorization", &auth_value);
 
     let fetch = warp::path("document")
         .and(auth)
