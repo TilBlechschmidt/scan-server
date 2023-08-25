@@ -24,8 +24,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .text()
         .await?;
 
-    println!("BODY:\n{body}");
-
     let files: Vec<FileEntry> = serde_json::from_str(&body).unwrap();
 
     for file_entry in files {

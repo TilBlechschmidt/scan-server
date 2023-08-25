@@ -20,14 +20,13 @@ async fn main() {
     // Parse arguments from environment by leaking their memory and converting them to `&'static str` instances
     let storage_path =
         string_to_static_str(std::env::var("STORAGE_PATH").expect("No storage path provided."));
-    let auth_token =
-        string_to_static_str(std::env::var("AUTH_TOKEN").expect("No auth token provided."));
+    let auth_token = std::env::var("AUTH_TOKEN").expect("No auth token provided.");
 
     create_dir_all(storage_path)
         .await
         .expect("failed to create storage directory");
 
-    let auth_value = format!("Bearer {auth_token}");
+    let auth_value = string_to_static_str(format!("Bearer {auth_token}"));
     let auth = warp::header::exact("Authorization", &auth_value);
 
     let fetch = warp::path("document")
