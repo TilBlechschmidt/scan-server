@@ -1,5 +1,5 @@
 use crate::webdav::WebdavClient;
-use chrono::Utc;
+use chrono::{SecondsFormat, Utc};
 use log::debug;
 use reqwest::StatusCode;
 use std::sync::Arc;
@@ -48,7 +48,7 @@ async fn store_file(
     webdav: Arc<WebdavClient>,
     bytes: Bytes,
 ) -> Result<impl warp::Reply, Rejection> {
-    let id = Utc::now().to_rfc3339();
+    let id = Utc::now().to_rfc3339_opts(SecondsFormat::Secs, true);
     let path = format!("EpicPrinter-{id}");
 
     debug!("put\t{id} (len = {})", bytes.len());
