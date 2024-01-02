@@ -48,7 +48,9 @@ async fn store_file(
     webdav: Arc<WebdavClient>,
     bytes: Bytes,
 ) -> Result<impl warp::Reply, Rejection> {
-    let id = Utc::now().to_rfc3339_opts(SecondsFormat::Secs, true);
+    let id = Utc::now()
+        .to_rfc3339_opts(SecondsFormat::Secs, true)
+        .replace(":", "-");
     let path = format!("EpicPrinter-{id}.pdf");
 
     debug!("put\t{id} (len = {})", bytes.len());
