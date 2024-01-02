@@ -49,7 +49,7 @@ async fn store_file(
     bytes: Bytes,
 ) -> Result<impl warp::Reply, Rejection> {
     let id = Utc::now().to_rfc3339_opts(SecondsFormat::Secs, true);
-    let path = format!("EpicPrinter-{id}");
+    let path = format!("EpicPrinter-{id}.pdf");
 
     debug!("put\t{id} (len = {})", bytes.len());
     webdav.put(path, bytes).await.map_err(internal_error)?;
