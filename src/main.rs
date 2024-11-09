@@ -1,18 +1,15 @@
-use webdav::WebdavClient;
+use user::UserMap;
 
 mod http;
+mod paperless;
+mod user;
 mod webdav;
 
 #[tokio::main]
 async fn main() {
     env_logger::init();
 
-    let endpoint = std::env::var("WEBDAV_URL").expect("No WebDAV URL provided");
-    let user = std::env::var("WEBDAV_USER").expect("No WebDAV user provided");
-    let pass = std::env::var("WEBDAV_PASS").expect("No WebDAV password provided");
+    let users = UserMap::from_env();
 
-    let client =
-        WebdavClient::new(endpoint, user, pass).expect("failed to construct WebDAV client");
-
-    http::run(client).await;
+    http::run(users).await;
 }

@@ -1,17 +1,11 @@
-use crate::webdav::WebdavClient;
-use chrono::{SecondsFormat, Utc};
-use log::debug;
+use crate::user::UserMap;
 use reqwest::StatusCode;
-use std::sync::Arc;
 use warp::{
-    hyper::body::Bytes,
     reject::{Reject, Rejection},
     Filter,
 };
 
-pub async fn run(webdav: WebdavClient) {
-    let webdav = Arc::new(webdav);
-
+pub async fn run(users: UserMap) {
     let health_probe = warp::get()
         .and(warp::path("health"))
         .then(|| async move { StatusCode::OK });
@@ -23,9 +17,18 @@ pub async fn run(webdav: WebdavClient) {
     let head = warp::head().then(|| async move { StatusCode::NOT_FOUND });
 
     let store = warp::put()
-        .and(warp::path!("Image.pdf"))
+        .and(warp::path!(String / "Image.pdf"))
         .and(warp::body::bytes())
-        .and_then(move |bytes| store_file(webdav.clone(), bytes));
+        .and_then(move |user, bytes| {
+            let users = users.clone();
+
+            async move {
+                match users.get(&user) {
+                    Some(user) => user.store(bytes).await,
+                    None => Ok(StatusCode::NOT_FOUND),
+                }
+            }
+        });
 
     let routes = head_root
         .or(head)
@@ -40,34 +43,20 @@ pub async fn run(webdav: WebdavClient) {
     };
 
     let (_, server) = warp::serve(routes).bind_with_graceful_shutdown(([0, 0, 0, 0], 3030), signal);
+    log::info!("Listening on 0.0.0.0:3030");
 
     server.await
 }
 
-async fn store_file(
-    webdav: Arc<WebdavClient>,
-    bytes: Bytes,
-) -> Result<impl warp::Reply, Rejection> {
-    let id = Utc::now()
-        .to_rfc3339_opts(SecondsFormat::Secs, true)
-        .replace(":", "-");
-    let path = format!("EpicPrinter-{id}.pdf");
-
-    debug!("put\t{id} (len = {})", bytes.len());
-    webdav.put(path, bytes).await.map_err(internal_error)?;
-
-    Ok(StatusCode::OK)
-}
-
 #[derive(Debug)]
-struct InternalError {
+pub struct InternalError {
     #[allow(dead_code)]
-    message: String,
+    pub message: String,
 }
 
 /// Rejects a request with `404 Not Found`.
 #[inline]
-fn internal_error(error: impl std::error::Error) -> Rejection {
+pub fn internal_error(error: impl ToString) -> Rejection {
     warp::reject::custom(InternalError {
         message: error.to_string(),
     })
