@@ -10,9 +10,18 @@ pub async fn run(users: UserMap) {
         .and(warp::path("health"))
         .then(|| async move { StatusCode::OK });
 
-    let head_root = warp::head()
-        .and(warp::path::end())
-        .then(|| async move { StatusCode::OK });
+    let head_root_users = users.clone();
+    let head_root = warp::head().and(warp::path!(String)).then(move |user| {
+        let found = head_root_users.get(&user).is_some();
+
+        async move {
+            if found {
+                StatusCode::OK
+            } else {
+                StatusCode::NOT_FOUND
+            }
+        }
+    });
 
     let head = warp::head().then(|| async move { StatusCode::NOT_FOUND });
 
