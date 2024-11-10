@@ -167,7 +167,7 @@ impl PaperlessClient {
 
         if let Some(task) = tasks.pop() {
             match task.status {
-                Some(TaskStatus::Started) | None => Ok(None),
+                Some(TaskStatus::Started) | Some(TaskStatus::Pending) | None => Ok(None),
                 Some(TaskStatus::Success) => Ok(task.related_document),
                 Some(TaskStatus::Failure) => Err(format!(
                     "Processing failed {}",
@@ -212,6 +212,7 @@ struct Task {
 #[derive(Deserialize)]
 #[serde(rename_all = "UPPERCASE")]
 enum TaskStatus {
+    Pending,
     Started,
     Failure,
     Success,
