@@ -65,7 +65,7 @@ impl PaperlessClient {
         let title = title.into();
 
         let file = Part::stream(body)
-            .file_name("Scan.pdf")
+            .file_name(format!("EpicPrinter-{title}.pdf"))
             .mime_str("application/pdf")?;
 
         let form = multipart::Form::new()
