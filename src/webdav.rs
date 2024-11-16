@@ -1,8 +1,10 @@
+use super::StorageBackend;
 use reqwest::{Body, Client, IntoUrl, Method, Url};
 use std::borrow::Cow;
 
 type CowStr = Cow<'static, str>;
 
+#[derive(Clone)]
 pub struct WebdavClient {
     http_client: Client,
     endpoint: Url,
@@ -23,14 +25,18 @@ impl WebdavClient {
             pass: pass.into(),
         })
     }
+}
 
-    pub async fn put<S, B>(&self, path: S, body: B) -> reqwest::Result<()>
-    where
-        S: Into<CowStr>,
-        B: Into<Body>,
-    {
+impl StorageBackend for WebdavClient {
+    async fn put(
+        &self,
+        id: &str,
+        body: Body,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        let path = format!("EpicPrinter-{id}.pdf");
+
         let mut url = self.endpoint.clone();
-        url.path_segments_mut().unwrap().push(&path.into());
+        url.path_segments_mut().unwrap().push(&path);
 
         self.http_client
             .request(Method::PUT, url)

@@ -11,6 +11,8 @@ use std::{
 use tokio::{task::JoinSet, time::sleep};
 use uuid::Uuid;
 
+use crate::StorageBackend;
+
 type CowStr = Cow<'static, str>;
 
 #[derive(Clone)]
@@ -45,71 +47,11 @@ impl PaperlessClient {
         S: Into<CowStr>,
     {
         Ok(Self {
-            http_client: reqwest::ClientBuilder::new()
-                .danger_accept_invalid_certs(true)
-                .build()
-                .unwrap(), // Client::new(),
+            http_client: Client::new(),
             endpoint: endpoint.into_url()?,
             token: token.into(),
             custom_fields: CustomFieldsPatch { custom_fields },
         })
-    }
-
-    pub async fn put<S, B>(
-        &self,
-        title: S,
-        body: B,
-    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>>
-    where
-        S: Into<CowStr>,
-        B: Into<Body>,
-    {
-        let url = self.url(&["api", "documents", "post_document", ""]);
-
-        let title = title.into();
-        let file_name_prefix = format!("EpicPrinter-{title}");
-
-        let file = Part::stream(body)
-            .file_name(format!("{file_name_prefix}.pdf"))
-            .mime_str("application/pdf")?;
-
-        let form = multipart::Form::new()
-            .text("title", title.clone())
-            .part("document", file);
-
-        let upload_id = self
-            .http_client
-            .post(url)
-            .header("Authorization", format!("Token {}", self.token))
-            .multipart(form)
-            .send()
-            .await?
-            .error_for_status()?
-            .json::<Uuid>()
-            .await?;
-
-        debug!("{title}\tUpload complete (task = {upload_id})");
-
-        let client = self.clone();
-
-        // While running this sync would be nice for error reporting,
-        // it would stall the scanning process considerably. This would
-        // make bulk scanning really annoying. Additionally, the printer
-        // would not properly report the error anyway so we might as well.
-        //
-        // This runs the risk of not finishing the processing without the
-        // user noticing but the impact is rather low so whatever :D
-        tokio::spawn(async move {
-            match client
-                .wait_for_processing(&upload_id, &file_name_prefix)
-                .await
-            {
-                Ok(_) => debug!("{title}\tProcessing complete"),
-                Err(err) => error!("{title}\t{err}"),
-            }
-        });
-
-        Ok(())
     }
 
     async fn set_document_attributes(
@@ -269,6 +211,50 @@ impl PaperlessClient {
         }
 
         url
+    }
+}
+
+impl StorageBackend for PaperlessClient {
+    async fn put(
+        &self,
+        id: &str,
+        body: Body,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        let url = self.url(&["api", "documents", "post_document", ""]);
+
+        let file_name_prefix = format!("EpicPrinter-{id}");
+
+        let file = Part::stream(body)
+            .file_name(format!("{file_name_prefix}.pdf"))
+            .mime_str("application/pdf")?;
+
+        let form = multipart::Form::new()
+            .text("title", id.to_string())
+            .part("document", file);
+
+        let upload_id = self
+            .http_client
+            .post(url)
+            .header("Authorization", format!("Token {}", self.token))
+            .multipart(form)
+            .send()
+            .await?
+            .error_for_status()?
+            .json::<Uuid>()
+            .await?;
+
+        debug!("{id}\tUpload complete (task = {upload_id})");
+
+        let result = self
+            .wait_for_processing(&upload_id, &file_name_prefix)
+            .await;
+
+        match &result {
+            Ok(_) => debug!("{id}\tProcessing complete"),
+            Err(err) => error!("{id}\t{err}"),
+        }
+
+        result
     }
 }
 

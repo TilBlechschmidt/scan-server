@@ -1,7 +1,10 @@
-use crate::{http::internal_error, paperless::PaperlessClient, webdav::WebdavClient};
+use crate::{
+    http::internal_error, paperless::PaperlessClient, telegram::TelegramClient,
+    webdav::WebdavClient, StorageBackend,
+};
 use chrono::{SecondsFormat, Utc};
-use log::debug;
-use reqwest::StatusCode;
+use log::{debug, error};
+use reqwest::{Body, StatusCode};
 use std::{collections::HashMap, env, ops::Deref, sync::Arc};
 use warp::{hyper::body::Bytes, reject::Rejection};
 
@@ -30,10 +33,12 @@ impl Deref for UserMap {
     }
 }
 
+#[derive(Clone)]
 pub struct User {
     name: String,
     webdav: Option<WebdavClient>,
     paperless: Option<PaperlessClient>,
+    telegram: Option<TelegramClient>,
 }
 
 impl User {
@@ -41,11 +46,13 @@ impl User {
         name: String,
         webdav: Option<WebdavClient>,
         paperless: Option<PaperlessClient>,
+        telegram: Option<TelegramClient>,
     ) -> Self {
         Self {
             name: name.to_lowercase(),
             webdav,
             paperless,
+            telegram,
         }
     }
 
@@ -73,7 +80,13 @@ impl User {
                 .expect("Failed to construct Paperless client")
         });
 
-        Self::new(name, webdav, paperless)
+        let telegram = env::var(format!("{u}_TELEGRAM_TOKEN")).ok().map(|token| {
+            let chat = env::var(format!("{u}_TELEGRAM_CHAT")).expect("Missing telegram chat ID");
+
+            TelegramClient::new(chat, token).expect("Failed to construct Telegram client")
+        });
+
+        Self::new(name, webdav, paperless, telegram)
     }
 
     pub async fn store(&self, bytes: Bytes) -> Result<StatusCode, Rejection> {
@@ -87,19 +100,47 @@ impl User {
             bytes.len()
         );
 
-        if let Some(webdav) = &self.webdav {
+        if let Some(webdav) = self.webdav.clone() {
             debug!("{id}\tCalling WebDAV ...");
-            webdav
-                .put(format!("EpicPrinter-{id}.pdf"), bytes.clone())
-                .await
-                .map_err(internal_error)?;
+            self.store_in_background(id.clone(), bytes.clone().into(), webdav);
         }
 
-        if let Some(paperless) = &self.paperless {
+        if let Some(paperless) = self.paperless.clone() {
             debug!("{id}\tCalling Paperless ...");
-            paperless.put(id, bytes).await.map_err(internal_error)?;
+            self.store_in_background(id, bytes.into(), paperless);
         }
 
         Ok(StatusCode::OK)
+    }
+
+    fn store_in_background(
+        &self,
+        id: String,
+        bytes: Body,
+        backend: impl StorageBackend + Send + Sync + 'static,
+    ) {
+        let telegram = self.telegram.clone();
+
+        tokio::spawn(async move {
+            let result = backend.put(&id, bytes).await;
+
+            match result {
+                Ok(_) => debug!("{id}\tUpload finished"),
+                Err(err) => {
+                    error!("{id}\tUpload failed: {err:?}");
+
+                    if let Some(telegram) = telegram {
+                        if let Err(notify_error) = telegram
+                            .send(format!(
+                                "<b>EpicPrinter processing failed</b>\nFile: <i>{id}</i>\n\n<blockquote><code>{err}</code></blockquote>"
+                            ))
+                            .await
+                        {
+                            error!("{id}\tFailed to notify user of error: {notify_error:?}");
+                        }
+                    }
+                }
+            }
+        });
     }
 }
