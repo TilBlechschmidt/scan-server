@@ -4,6 +4,7 @@ use reqwest::{
     Body, Client, IntoUrl, Url,
 };
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use std::{
     borrow::Cow,
     time::{Duration, Instant},
@@ -28,7 +29,7 @@ pub struct PaperlessClient {
 #[derive(Serialize, Deserialize, Clone)]
 pub struct CustomField {
     field: usize,
-    value: usize,
+    value: Value,
 }
 
 #[derive(Serialize, Clone)]
